@@ -34,24 +34,24 @@ for i in range(lenght):
         if word in reserved:
             newcode += word
         else:
-            newcode += "id" + str(idcounter) + " "
+            newcode += "id" + str(idcounter) 
             idcounter += 1
 
         skip = eindex - sindex
     if code[i] == "=":
-        newcode += "= "
+        newcode += "="
     if code[i] == "+":
-        newcode += "+ "
+        newcode += "+"
     if code[i] == "-":
-        newcode += "- "
+        newcode += "-"
     if code[i] == "":
         newcode += ""
     if code[i] == "/":
-        newcode += "/ "
+        newcode += "/"
     if code[i] == "^":
         newcode += "^"
     if code[i] == "%":
-        newcode += " % "
+        newcode += " %"
     if code[i] == "(":
         newcode += "("
     if code[i] == ")":
