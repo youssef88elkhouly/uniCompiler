@@ -1,7 +1,5 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+# synt.py
 import re
-import math
 
 class TreeNode:
     def __init__(self, value, arity=2):
@@ -12,8 +10,8 @@ class TreeNode:
 
 class SyntaxAnalyzer:
     def __init__(self):
-        # precedence, (precedence, associativity) assoc: 'L' or 'R'
         self.operators = {
+            '=': (0, 'R'),  # Assignment (lowest precedence, right-associative)
             '+': (1, 'L'), '-': (1, 'L'),
             '*': (2, 'L'), '/': (2, 'L'), '%': (2, 'L'),
             '^': (3, 'R'),
@@ -22,20 +20,21 @@ class SyntaxAnalyzer:
 
     def tokenize(self, expr):
         expr = expr.strip()
-        # insert spaces around parentheses and operators except unary minus handling will be done later
-        expr = re.sub(r'([\+\-\*/\^%\(\)])', r' \1 ', expr)
+        # Insert spaces around operators and parentheses
+        expr = re.sub(r'([=\+\-\*/\^%\(\)])', r' \1 ', expr)
         raw = [t for t in expr.split() if t]
         tokens = []
+        
         for i, t in enumerate(raw):
             if re.fullmatch(r'\d+(\.\d+)?', t):  # number
                 tokens.append(('NUMBER', t))
             elif t.isidentifier():  # identifier like x, var1
                 tokens.append(('IDENT', t))
-            elif t in ('+', '*', '/', '^', '%'):
+            elif t in ('+', '*', '/', '^', '%', '='):
                 tokens.append(('OP', t))
             elif t == '-':
                 # unary if at start or after operator or after left paren
-                if i == 0 or raw[i-1] in ('+', '-', '*', '/', '^', '%', '('):
+                if i == 0 or raw[i-1] in ('=', '+', '-', '*', '/', '^', '%', '('):
                     tokens.append(('OP', 'neg'))
                 else:
                     tokens.append(('OP', '-'))
@@ -70,7 +69,7 @@ class SyntaxAnalyzer:
                     out.append(stack.pop()[1])
                 if not stack:
                     raise ValueError("Mismatched parentheses")
-                stack.pop()  # remove LP
+                stack.pop()
             else:
                 raise ValueError(f"Unknown token {val}")
         while stack:
@@ -90,7 +89,7 @@ class SyntaxAnalyzer:
                     node.right = stack.pop()
                     stack.append(node)
                 else:
-                    # binary
+                    # For assignment, it's binary but we need to handle it specially
                     if len(stack) < 2:
                         raise ValueError("Invalid expression for binary operator")
                     right = stack.pop()
@@ -103,109 +102,21 @@ class SyntaxAnalyzer:
                 stack.append(TreeNode(tok, arity=0))
         return stack[0] if stack else None
 
-class TreeDrawer(tk.Tk):
-    NODE_RADIUS = 20
-    X_GAP = 20
-    Y_GAP = 70
+    def analyze_expression(self, expr):
+        tokens = self.tokenize(expr)
+        postfix = self.infix_to_postfix(tokens)
+        tree = self.build_syntax_tree(postfix)
+        return {
+            'tokens': tokens,
+            'postfix': postfix,
+            'tree': tree
+        }
 
-    def __init__(self):
-        super().__init__()
-        self.title("Postfix / Syntax Tree Viewer")
-        self.geometry("900x600")
-        self.analyzer = SyntaxAnalyzer()
-        self._build_ui()
-
-    def _build_ui(self):
-        top = ttk.Frame(self)
-        top.pack(fill='x', padx=6, pady=6)
-
-        ttk.Label(top, text="Expression (infix):").pack(side='left')
-        self.entry = ttk.Entry(top)
-        self.entry.pack(side='left', fill='x', expand=True, padx=6)
-        self.entry.insert(0, "a + b * (c - d) ^ e")
-
-        ttk.Button(top, text="Draw Tree", command=self.on_draw).pack(side='left', padx=6)
-        ttk.Button(top, text="Show Postfix", command=self.on_show_postfix).pack(side='left')
-
-        self.canvas = tk.Canvas(self, bg='white')
-        self.canvas.pack(fill='both', expand=True, padx=6, pady=6)
-
-        bottom = ttk.Frame(self)
-        bottom.pack(fill='x', padx=6, pady=4)
-        self.postfix_label = ttk.Label(bottom, text="Postfix: ")
-        self.postfix_label.pack(side='left')
-
-    def on_show_postfix(self):
-        expr = self.entry.get()
-        try:
-            tokens = self.analyzer.tokenize(expr)
-            postfix = self.analyzer.infix_to_postfix(tokens)
-            self.postfix_label.config(text="Postfix: " + " ".join(postfix))
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def on_draw(self):
-        expr = self.entry.get()
-        try:
-            tokens = self.analyzer.tokenize(expr)
-            postfix = self.analyzer.infix_to_postfix(tokens)
-            tree = self.analyzer.build_syntax_tree(postfix)
-            self.postfix_label.config(text="Postfix: " + " ".join(postfix))
-            self.draw_tree(tree)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def draw_tree(self, root):
-        self.canvas.delete('all')
-        if not root:
-            return
-        # assign x positions via inorder traversal
-        positions = {}
-        counter = {'x': 0}
-
-        def inorder(node, depth=0):
-            if not node:
-                return
-            if node.left:
-                inorder(node.left, depth+1)
-            x = counter['x']
-            positions[node] = (x, depth)
-            counter['x'] += 1
-            if node.right:
-                inorder(node.right, depth+1)
-
-        inorder(root)
-
-        # compute coordinates scaled to canvas size
-        width = max(1, counter['x'])
-        canvas_w = max(800, self.canvas.winfo_width())
-        canvas_h = max(200, self.canvas.winfo_height())
-        x_scale = (canvas_w - 40) / width
-        y_scale = self.Y_GAP
-
-        coords = {}
-        for node, (ix, depth) in positions.items():
-            cx = 20 + ix * x_scale
-            cy = 20 + depth * y_scale
-            coords[node] = (cx, cy)
-
-        # draw edges first
-        for node, (cx, cy) in coords.items():
-            if node.left:
-                lx, ly = coords[node.left]
-                self.canvas.create_line(cx, cy + self.NODE_RADIUS, lx, ly - self.NODE_RADIUS, width=2)
-            if node.right:
-                rx, ry = coords[node.right]
-                self.canvas.create_line(cx, cy + self.NODE_RADIUS, rx, ry - self.NODE_RADIUS, width=2)
-
-        # draw nodes
-        for node, (cx, cy) in coords.items():
-            self.canvas.create_oval(cx - self.NODE_RADIUS, cy - self.NODE_RADIUS,
-                                    cx + self.NODE_RADIUS, cy + self.NODE_RADIUS,
-                                    fill='#f0f0f0', outline='black')
-            text = str(node.value)
-            self.canvas.create_text(cx, cy, text=text, font=('Arial', 10, 'bold'))
-
+# Test function when run directly
 if __name__ == "__main__":
-    app = TreeDrawer()
-    app.mainloop()
+    analyzer = SyntaxAnalyzer()
+    expr = input("Enter expression for syntax analysis: ")
+    result = analyzer.analyze_expression(expr)
+    print(f"Tokens: {result['tokens']}")
+    print(f"Postfix: {' '.join(result['postfix'])}")
+    print(f"Tree root: {result['tree'].value if result['tree'] else 'None'}")
